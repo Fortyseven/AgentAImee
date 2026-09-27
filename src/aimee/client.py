@@ -98,15 +98,24 @@ class OpenAIClient:
             if not isinstance(args, dict):
                 raise AimeeError(f"Model returned non-object tool arguments: {raw!r}")
             out.append(
-                ToolCall(id=tc.get("id") or "", name=fn.get("name") or "", arguments=args, raw_arguments=raw)
+                ToolCall(
+                    id=tc.get("id") or "",
+                    name=fn.get("name") or "",
+                    arguments=args,
+                    raw_arguments=raw,
+                )
             )
         return out
 
-    async def chat(self, messages: Sequence[Any], tools: Iterable[Any] | None = None) -> ChatResponse:
+    async def chat(
+        self, messages: Sequence[Any], tools: Iterable[Any] | None = None
+    ) -> ChatResponse:
         """One non-streamed completion, returned as a full ChatResponse."""
         try:
             resp = await self._client.post(
-                "/chat/completions", json=self._body(messages, tools, stream=False), headers=self._auth_headers
+                "/chat/completions",
+                json=self._body(messages, tools, stream=False),
+                headers=self._auth_headers,
             )
         except httpx.HTTPError as e:
             raise AimeeError(f"OpenAI API request failed: {e}") from e

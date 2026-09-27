@@ -42,7 +42,9 @@ def chat_json(payload: dict) -> httpx.Response:
 
 
 PLAIN_REPLY = {
-    "choices": [{"message": {"role": "assistant", "content": "Hello there"}, "finish_reason": "stop"}],
+    "choices": [
+        {"message": {"role": "assistant", "content": "Hello there"}, "finish_reason": "stop"}
+    ],
     "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
 }
 
@@ -87,8 +89,16 @@ def test_chat_response_tool_calls_parsed():
                     "role": "assistant",
                     "content": None,
                     "tool_calls": [
-                        {"id": "c1", "type": "function", "function": {"name": "read", "arguments": '{"path": "a.md"}'}},
-                        {"id": "c2", "type": "function", "function": {"name": "bash", "arguments": '{"command": "ls"}'}},
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {"name": "read", "arguments": '{"path": "a.md"}'},
+                        },
+                        {
+                            "id": "c2",
+                            "type": "function",
+                            "function": {"name": "bash", "arguments": '{"command": "ls"}'},
+                        },
                     ],
                 },
                 "finish_reason": "tool_calls",
@@ -110,7 +120,11 @@ def test_invalid_json_arguments_raise():
                 "message": {
                     "role": "assistant",
                     "tool_calls": [
-                        {"id": "c1", "type": "function", "function": {"name": "read", "arguments": "{nope"}},
+                        {
+                            "id": "c1",
+                            "type": "function",
+                            "function": {"name": "read", "arguments": "{nope"},
+                        },
                     ],
                 },
                 "finish_reason": "tool_calls",
@@ -162,25 +176,23 @@ SSE_STREAM = (
     + sse_line(
         {
             "choices": [
-                {
-                    "delta": {
-                        "tool_calls": [
-                            {"index": 0, "function": {"arguments": 'h":"a.md"}'}}
-                        ]
-                    }
-                }
+                {"delta": {"tool_calls": [{"index": 0, "function": {"arguments": 'h":"a.md"}'}}]}}
             ]
         }
     )
     + sse_line({"choices": [{"delta": {}, "finish_reason": "tool_calls"}]})
-    + sse_line({"choices": [], "usage": {"prompt_tokens": 3, "completion_tokens": 7, "total_tokens": 10}})
+    + sse_line(
+        {"choices": [], "usage": {"prompt_tokens": 3, "completion_tokens": 7, "total_tokens": 10}}
+    )
     + "data: [DONE]\n"
 )
 
 
 def test_stream_chat_yields_deltas():
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=SSE_STREAM.encode(), headers={"content-type": "text/event-stream"})
+        return httpx.Response(
+            200, content=SSE_STREAM.encode(), headers={"content-type": "text/event-stream"}
+        )
 
     client = make_client(handler)
 
@@ -208,7 +220,9 @@ def test_stream_body_includes_stream_options():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["body"] = json.loads(request.content)
-        return httpx.Response(200, content=b"data: [DONE]\n", headers={"content-type": "text/event-stream"})
+        return httpx.Response(
+            200, content=b"data: [DONE]\n", headers={"content-type": "text/event-stream"}
+        )
 
     client = make_client(handler)
 

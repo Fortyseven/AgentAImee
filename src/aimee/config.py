@@ -47,9 +47,7 @@ class AimeeConfig:
         """API key: explicit config, else $OPENAI_API_KEY. Raises if unset."""
         key = self.api_key or os.environ.get(ENV_API_KEY)
         if not key:
-            raise ValueError(
-                f"No API key: set {ENV_API_KEY} or pass AimeeConfig(api_key=...)"
-            )
+            raise ValueError(f"No API key: set {ENV_API_KEY} or pass AimeeConfig(api_key=...)")
         return key
 
     def resolved_roots(self) -> list[Path]:
