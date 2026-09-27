@@ -45,6 +45,10 @@ class FakeModel:
     def __init__(self, responses: list[ChatResponse]):
         self.responses = list(responses)
         self.calls: list[dict] = []
+        self.closed = False
+
+    async def aclose(self) -> None:
+        self.closed = True
 
     def _next(self, messages, tools) -> ChatResponse:
         self.calls.append(
@@ -352,3 +356,54 @@ def test_system_prompt_has_agents_md_and_skills(tmp_path):
     assert "demo" in system
     assert "A demo skill." in system
     assert str(skill_dir / "SKILL.md") in system
+
+
+def test_managed_client_lifecycle_across_runs(tmp_path, monkeypatch):
+    """Regression: a self-created client is reused across runs, not closed per run."""
+    created: list[FakeModel] = []
+    pool = [FakeModel([reply("a1"), reply("a2"), reply("a3")]), FakeModel([reply("b1")])]
+
+    def factory(config):
+        fake = pool.pop(0)
+        created.append(fake)
+        return fake
+
+    monkeypatch.setattr("aimee.agent.OpenAIClient", factory)
+    agent = Aimee(AimeeConfig(roots=[tmp_path], api_key="sk-test"))
+
+    # Two consecutive sync runs (the REPL scenario that used to crash).
+    assert agent.run("x").final_text == "a1"
+    assert agent.run("x").final_text == "a2"
+    assert len(created) == 1 and not created[0].closed
+
+    # Async runs reuse the same client too.
+    assert run(agent, "x").final_text == "a3"
+    assert len(created) == 1 and not created[0].closed
+
+    # aclose closes the client; the next run creates a fresh one.
+    asyncio.run(agent.aclose())
+    assert created[0].closed
+    assert run(agent, "x").final_text == "b1"
+    assert len(created) == 2 and not created[1].closed
+    agent.close()  # stops the background loop thread; no exception
+
+
+def test_close_and_rerun(tmp_path, monkeypatch):
+    created: list[FakeModel] = []
+    pool = [FakeModel([reply("one")]), FakeModel([reply("two")])]
+
+    def factory(config):
+        fake = pool.pop(0)
+        created.append(fake)
+        return fake
+
+    monkeypatch.setattr("aimee.agent.OpenAIClient", factory)
+    agent = Aimee(AimeeConfig(roots=[tmp_path], api_key="sk-test"))
+
+    assert agent.run("x").final_text == "one"
+    agent.close()
+    assert created[0].closed  # close() closed the client AND stopped the loop
+
+    # After close, the background loop restarts and the client is recreated.
+    assert agent.run("x").final_text == "two"  # fresh client, fresh loop
+    agent.close()

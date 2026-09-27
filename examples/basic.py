@@ -101,10 +101,13 @@ def main() -> int:
     args = parser.parse_args()
 
     agent = build_agent(args.model)
-    if args.repl:
-        repl(agent)
-        return 0
-    return 0 if run_task(agent, args.task or DEFAULT_TASK) else 1
+    try:
+        if args.repl:
+            repl(agent)
+            return 0
+        return 0 if run_task(agent, args.task or DEFAULT_TASK) else 1
+    finally:
+        agent.close()
 
 
 if __name__ == "__main__":

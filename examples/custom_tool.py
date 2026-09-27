@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from aimee import Aimee, AimeeConfig, RunReport, Tool, ToolDecision
+from aimee import Aimee, AimeeConfig, AimeeError, RunReport, Tool, ToolDecision
 from aimee.tools import basic_tools
 
 HERE = Path(__file__).resolve().parent
@@ -82,7 +82,13 @@ def main() -> int:
         "the workspace safety policy. Finally try to run `bash rm --help` and report "
         "what happened."
     )
-    agent.run(task)
+    try:
+        agent.run(task)
+    except AimeeError:
+        print("\n[api error] see above — fix the endpoint/model and try again.", file=sys.stderr)
+        return 1
+    finally:
+        agent.close()
     print()
     return 0
 

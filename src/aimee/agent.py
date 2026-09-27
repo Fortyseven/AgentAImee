@@ -41,8 +41,9 @@ class Aimee:
         report = await Aimee(config, tools=basic_tools()).run_async("...")
 
     `client` accepts anything with `chat()`/`stream_chat()` (dependency
-    injection for tests); otherwise an OpenAIClient is created and closed
-    automatically per run.
+    injection for tests); otherwise an OpenAIClient is created lazily and
+    reused across runs. Release resources with `close()`/`aclose()` or by
+    using the agent as a context manager.
     """
 
     def __init__(
@@ -57,6 +58,8 @@ class Aimee:
         self.config = config or AimeeConfig()
         self._client = client
         self._owns_client = client is None
+        self._client_closed = False
+        self._loop_thread: _LoopThread | None = None
         self.tools: list[Tool] = list(tools)
         self.hooks: list[Any] = list(hooks)
         self.stream = stream
@@ -76,24 +79,46 @@ class Aimee:
     # -- entry points ------------------------------------------------------
 
     def run(self, task: str) -> RunReport:
-        """Run the agent (sync). Executes the async loop on a background thread."""
-        return run_coroutine_on_thread(self.run_async(task))
+        """Run the agent (sync). Reuses one persistent background event loop."""
+        if self._loop_thread is None:
+            self._loop_thread = _LoopThread()
+        return self._loop_thread.submit(self.run_async(task))
 
     async def run_async(self, task: str) -> RunReport:
-        """Run the agent (async). Creates/closes its own model client if needed."""
-        created = self._client is None
-        if created:
+        """Run the agent (async). The managed model client is created once and reused."""
+        await self._ensure_client()
+        return await self._run(task)
+
+    async def _ensure_client(self) -> None:
+        """Create the managed model client on first use, or again after aclose()."""
+        if self._client is None or (self._owns_client and self._client_closed):
             self._client = OpenAIClient(self.config)
-        try:
-            return await self._run(task)
-        finally:
-            if created and self._client is not None:
-                await self._client.aclose()
+            self._owns_client = True
+            self._client_closed = False
 
     async def aclose(self) -> None:
-        """Close a model client Aimee created itself (no-op for injected clients)."""
-        if self._owns_client and self._client is not None:
+        """Close the model client Aimee created itself (no-op for injected clients)."""
+        if self._owns_client and self._client is not None and not self._client_closed:
             await self._client.aclose()
+            self._client_closed = True
+        self.close()
+
+    def close(self) -> None:
+        """Stop the sync background loop; close an owned client while the loop is up."""
+        loop_thread = self._loop_thread
+        self._loop_thread = None
+        if loop_thread is None:
+            return
+        if self._owns_client and self._client is not None and not self._client_closed:
+            loop_thread.submit(self._client.aclose())
+            self._client_closed = True
+        loop_thread.stop()
+
+    async def __aenter__(self) -> Aimee:
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        await self.aclose()
 
     # -- the loop ----------------------------------------------------------
 
@@ -249,27 +274,50 @@ def _assemble_tool_call(index: int, slot: dict[str, str]) -> ToolCall:
     return ToolCall(id=slot["id"], name=slot["name"], arguments=args, raw_arguments=raw)
 
 
-def run_coroutine_on_thread(coro: Any) -> Any:
-    """Run a coroutine on a dedicated background event-loop thread.
+class _LoopThread:
+    """Persistent background event-loop thread for the sync API.
 
-    Works even when the caller already has a running event loop (Jupyter,
-    async frameworks, Tk). The exception, if any, is re-raised here.
+    All `Aimee.run()` calls share one loop, so the owned HTTP client stays
+    on a single event loop (httpx clients are not reusable across loops).
+    Works even when the caller has a running event loop (Jupyter, async
+    frameworks, Tk). The coroutine's exception, if any, is re-raised.
     """
-    box: list[Any] = []
 
-    def worker() -> None:
+    def __init__(self) -> None:
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._ready = threading.Event()
+
+    def submit(self, coro: Any) -> Any:
+        """Run a coroutine on the background loop; block until it finishes."""
+        if self._loop is None or not self._loop.is_running():
+            self._start()
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
+
+    def _start(self) -> None:
         loop = asyncio.new_event_loop()
-        try:
-            box.append(loop.run_until_complete(coro))
-        except BaseException as e:  # surfaced to the caller below
-            box.append(e)
-        finally:
-            loop.close()
+        self._loop = loop
+        self._ready.clear()
+        thread = threading.Thread(
+            target=self._run_loop, args=(loop,), name="aimee-loop", daemon=True
+        )
+        self._thread = thread
+        thread.start()
+        if not self._ready.wait(timeout=10):
+            raise AimeeError("Aimee background event loop failed to start")
 
-    thread = threading.Thread(target=worker, name="aimee-loop", daemon=True)
-    thread.start()
-    thread.join()
-    outcome = box[0]
-    if isinstance(outcome, BaseException):
-        raise outcome
-    return outcome
+    def _run_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        asyncio.set_event_loop(loop)
+        loop.call_soon(self._ready.set)
+        loop.run_forever()
+
+    def stop(self) -> None:
+        """Stop the loop and its thread; safe to call more than once."""
+        if self._loop is not None and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+            if self._thread is not None:
+                self._thread.join(timeout=5)
+        if self._loop is not None:
+            self._loop.close()
+        self._loop = None
+        self._thread = None
