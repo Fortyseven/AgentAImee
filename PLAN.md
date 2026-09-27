@@ -120,9 +120,9 @@ All new (empty repo): tree above. No git repo exists yet — initialize `git ini
 
 - [x] 1. `git init`, `.gitignore`, `pyproject.toml` (uv, hatchling, `httpx>=0.27`, pytest+ruff dev group), `uv sync`
 - [x] 2. `types.py` + `config.py`
-- [ ] 3. `client.py` (OpenAIClient, SSE parsing) + `test_client.py`
-- [ ] 4. `hooks.py` + `prompt.py` + `agent.py` (loop + facade) + `test_agent.py`, `test_prompt.py`, `test_hooks.py`
-- [ ] 5. `skills.py` + `test_skills.py`
+- [x] 3. `client.py` (OpenAIClient, SSE parsing) + `test_client.py`
+- [x] 4. `hooks.py` + `prompt.py` + `agent.py` (loop + facade) + `test_agent.py`, `test_prompt.py`, `test_hooks.py`
+- [x] 5. `skills.py` + `test_skills.py`
 - [ ] 6. `tools/` (base, fs, bash) + `test_tools.py`
 - [ ] 7. `examples/basic.py` + `examples/custom_tool.py` (+ their `AGENTS.md`/skill fixtures)
 - [ ] 8. `README.md` (quickstart, config/hook/tool/skill reference, security note on bash)
