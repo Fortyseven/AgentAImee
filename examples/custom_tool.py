@@ -52,13 +52,17 @@ class SafetyHooks:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Aimee custom tool + approval hook example")
     parser.add_argument(
-        "--model", default=None, help="Model name (default: $AIMEE_MODEL or 'default')"
+        "--model",
+        default=None,
+        help="Model name (default: $AIMEE_MODEL or the AimeeConfig default)",
     )
     args = parser.parse_args()
+    # Precedence: --model flag → $AIMEE_MODEL → AimeeConfig default (omitted when unset).
+    chosen = args.model or os.environ.get("AIMEE_MODEL")
     config = AimeeConfig(
         roots=[HERE, HERE / "secondary"],
         skills_dirs=[HERE / "skills"],
-        model=args.model or os.environ.get("AIMEE_MODEL") or "default",
+        **({"model": chosen} if chosen else {}),
     )
     agent = Aimee(
         config,

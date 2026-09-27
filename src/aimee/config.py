@@ -27,7 +27,7 @@ class AimeeConfig:
     """
 
     roots: list[Path] = field(default_factory=_default_roots)
-    model: str = "default"
+    model: str = "qwen38/27b-default"
     api_base: str | None = None
     api_key: str | None = None
     system_prompt: str | None = None

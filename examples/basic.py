@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from aimee import Aimee, AimeeConfig, RunReport
+from aimee import Aimee, AimeeConfig, AimeeError, RunReport
 from aimee.tools import basic_tools
 
 HERE = Path(__file__).resolve().parent
@@ -49,10 +49,13 @@ class Console:
 
 
 def build_agent(model: str | None = None) -> Aimee:
+    # Precedence: --model flag → $AIMEE_MODEL → AimeeConfig default. When neither
+    # override is set we omit the kwarg so the library default is used untouched.
+    chosen = model or os.environ.get("AIMEE_MODEL")
     config = AimeeConfig(
         roots=[HERE, HERE / "secondary"],  # primary + secondary workspace roots
         skills_dirs=[HERE / "skills"],
-        model=model or os.environ.get("AIMEE_MODEL") or "default",
+        **({"model": chosen} if chosen else {}),
         # agents_md: left as None → nearest AGENTS.md found walking up from roots[0]
     )
     return Aimee(
@@ -62,13 +65,20 @@ def build_agent(model: str | None = None) -> Aimee:
     )
 
 
-def run_task(agent: Aimee, task: str) -> None:
-    agent.run(task)
+def run_task(agent: Aimee, task: str) -> bool:
+    """Run one task. Returns True on success, False after a clean (non-fatal) error."""
+    try:
+        agent.run(task)
+    except AimeeError:
+        # The Console hook already printed the [error] line; add a hint and carry on.
+        print("\n[api error] see above — fix the endpoint/model and try again.", file=sys.stderr)
+        return False
     print()
+    return True
 
 
 def repl(agent: Aimee) -> None:
-    print("Aimee example REPL — type a task; empty line or 'exit' quits.")
+    print(f"Aimee example REPL (model: {agent.config.model}) — type a task; 'exit' quits.")
     while True:
         try:
             task = input("\nyou> ").strip()
@@ -84,16 +94,17 @@ def main() -> int:
     parser.add_argument("task", nargs="?", default=None, help="Task to run")
     parser.add_argument("--repl", action="store_true", help="Interactive REPL")
     parser.add_argument(
-        "--model", default=None, help="Model name (default: $AIMEE_MODEL or 'default')"
+        "--model",
+        default=None,
+        help="Model name (default: $AIMEE_MODEL or the AimeeConfig default)",
     )
     args = parser.parse_args()
 
     agent = build_agent(args.model)
     if args.repl:
         repl(agent)
-    else:
-        run_task(agent, args.task or DEFAULT_TASK)
-    return 0
+        return 0
+    return 0 if run_task(agent, args.task or DEFAULT_TASK) else 1
 
 
 if __name__ == "__main__":
