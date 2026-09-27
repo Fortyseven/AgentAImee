@@ -59,6 +59,32 @@ print(report.final_text, report.turns, report.tool_calls, report.usage)
 when the provider reports them), `truncated` (max turns hit), `messages`
 (full transcript).
 
+## Sessions (multi-turn memory)
+
+`agent.run(task)` is stateless — every run starts fresh. For a conversation
+that remembers, create a session:
+
+```python
+session = agent.session()
+session.run("hello, who am I talking to?")
+session.run("what did I just ask?")  # the model sees the whole prior exchange
+
+session.history  # snapshot: [system, user, assistant, user, assistant, ...]
+session.clear()  # start over (a fresh system prompt is built on the next run)
+```
+
+- A session is bound to one agent (sharing its tools/hooks/config); one agent
+  can hold many independent sessions at once.
+- `session.run()` / `await session.run_async()` mirror `Aimee.run()` /
+  `run_async()` — same hooks fire, same `RunReport` comes back (with `messages`
+  being the full session history).
+- Tool calls and their results are part of the history too, so the model can
+  reference earlier tool output in later turns.
+- History is unbounded by design: long conversations will eventually hit the
+  model's context limit — `session.clear()` resets when that gets close.
+  (`history` returns a snapshot; subclass or wrap the session for custom
+  trimming strategies.)
+
 ## Configuration (`AimeeConfig`)
 
 | Field | Default | Meaning |

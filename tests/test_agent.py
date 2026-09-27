@@ -138,9 +138,10 @@ def test_no_tools_single_turn(tmp_path):
     assert report.tool_calls == 0
     assert not report.truncated
     assert len(fake.calls) == 1
-    # transcript: system + user
-    assert [m.role for m in report.messages] == ["system", "user"]
+    # transcript: system + user + final assistant reply
+    assert [m.role for m in report.messages] == ["system", "user", "assistant"]
     assert "Aimee" in report.messages[0].content
+    assert report.messages[-1].content == "all done"
     assert recorder.dones == [report]
     assert recorder.turns == [1]
 

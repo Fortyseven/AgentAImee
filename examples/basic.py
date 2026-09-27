@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 
-from aimee import Aimee, AimeeConfig, AimeeError, RunReport
+from aimee import Aimee, AimeeConfig, AimeeError, AimeeSession, RunReport
 from aimee.tools import basic_tools
 
 HERE = Path(__file__).resolve().parent
@@ -65,10 +65,10 @@ def build_agent(model: str | None = None) -> Aimee:
     )
 
 
-def run_task(agent: Aimee, task: str) -> bool:
+def run_task(conversation: Aimee | AimeeSession, task: str) -> bool:
     """Run one task. Returns True on success, False after a clean (non-fatal) error."""
     try:
-        agent.run(task)
+        conversation.run(task)
     except AimeeError:
         # The Console hook already printed the [error] line; add a hint and carry on.
         print("\n[api error] see above — fix the endpoint/model and try again.", file=sys.stderr)
@@ -78,7 +78,12 @@ def run_task(agent: Aimee, task: str) -> bool:
 
 
 def repl(agent: Aimee) -> None:
-    print(f"Aimee example REPL (model: {agent.config.model}) — type a task; 'exit' quits.")
+    # A session keeps the whole conversation, so follow-up tasks see prior turns.
+    session = agent.session()
+    print(
+        f"Aimee example REPL (model: {agent.config.model}) — "
+        "each task sees the prior conversation; 'exit' quits."
+    )
     while True:
         try:
             task = input("\nyou> ").strip()
@@ -86,7 +91,7 @@ def repl(agent: Aimee) -> None:
             break
         if not task or task.lower() in {"exit", "quit"}:
             break
-        run_task(agent, task)
+        run_task(session, task)
 
 
 def main() -> int:

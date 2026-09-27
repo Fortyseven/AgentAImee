@@ -52,6 +52,10 @@ class Message:
         return cls(role=ROLE_USER, content=content)
 
     @classmethod
+    def assistant(cls, content: str, tool_calls: list[dict[str, Any]] | None = None) -> Message:
+        return cls(role=ROLE_ASSISTANT, content=content, tool_calls=tool_calls)
+
+    @classmethod
     def tool_result(cls, tool_call_id: str, content: str) -> Message:
         return cls(role=ROLE_TOOL, content=content, tool_call_id=tool_call_id)
 

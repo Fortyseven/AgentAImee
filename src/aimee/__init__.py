@@ -1,6 +1,6 @@
 """Aimee: a very minimal LLM agent loop with tools and skills."""
 
-from aimee.agent import Aimee
+from aimee.agent import Aimee, AimeeSession
 from aimee.client import OpenAIClient
 from aimee.config import AimeeConfig
 from aimee.skills import Skill, load_skills, parse_frontmatter
@@ -21,6 +21,7 @@ __all__ = [
     "Aimee",
     "AimeeConfig",
     "AimeeError",
+    "AimeeSession",
     "ChatResponse",
     "Message",
     "OpenAIClient",

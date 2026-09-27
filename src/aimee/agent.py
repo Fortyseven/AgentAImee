@@ -16,6 +16,7 @@ from aimee.prompt import build_system_prompt
 from aimee.skills import load_skills
 from aimee.tools.base import Tool, ToolContext, validate_tools
 from aimee.types import (
+    ROLE_SYSTEM,
     AimeeError,
     ChatResponse,
     Message,
@@ -79,15 +80,28 @@ class Aimee:
     # -- entry points ------------------------------------------------------
 
     def run(self, task: str) -> RunReport:
-        """Run the agent (sync). Reuses one persistent background event loop."""
-        if self._loop_thread is None:
-            self._loop_thread = _LoopThread()
-        return self._loop_thread.submit(self.run_async(task))
+        """Run the agent (stateless: no memory between runs). Sync; see run_async."""
+        return self._sync_submit(self.run_async(task))
 
     async def run_async(self, task: str) -> RunReport:
-        """Run the agent (async). The managed model client is created once and reused."""
+        """Run the agent (stateless: no memory between runs). Async."""
         await self._ensure_client()
         return await self._run(task)
+
+    def session(self) -> AimeeSession:
+        """Start a conversation session that keeps chat history across runs."""
+        return AimeeSession(self)
+
+    def _sync_submit(self, coro: Any) -> Any:
+        """Run a coroutine on the agent's persistent background event loop."""
+        if self._loop_thread is None:
+            self._loop_thread = _LoopThread()
+        return self._loop_thread.submit(coro)
+
+    async def _run_with_history(self, task: str, history: list[Message]) -> RunReport:
+        """One run whose messages accumulate in `history` (session support)."""
+        await self._ensure_client()
+        return await self._run(task, history=history)
 
     async def _ensure_client(self) -> None:
         """Create the managed model client on first use, or again after aclose()."""
@@ -122,14 +136,21 @@ class Aimee:
 
     # -- the loop ----------------------------------------------------------
 
-    async def _run(self, task: str) -> RunReport:
+    async def _run(self, task: str, history: list[Message] | None = None) -> RunReport:
         tools = validate_tools(self.tools)
         ctx = ToolContext(config=self.config, roots=self.config.resolved_roots())
         skills = load_skills(self.config.skills_dirs) if self.config.skills_dirs else []
-        messages: list[Message] = [
-            Message.system(build_system_prompt(self.config, skills)),
-            Message.user(task),
-        ]
+        if history is None:
+            messages: list[Message] = [
+                Message.system(build_system_prompt(self.config, skills)),
+                Message.user(task),
+            ]
+        else:
+            # Session mode: append this turn onto the accumulated conversation.
+            if not history or history[0].role != ROLE_SYSTEM:
+                history.insert(0, Message.system(build_system_prompt(self.config, skills)))
+            history.append(Message.user(task))
+            messages = history
         usage = TokenUsage()
         tool_call_count = 0
         turns = 0
@@ -148,6 +169,7 @@ class Aimee:
                 await fire(self.hooks, "on_turn", turns, response)
 
                 if not response.has_tool_calls:
+                    messages.append(Message.assistant(response.content or ""))
                     final_text = response.content
                     break
 
@@ -246,6 +268,42 @@ class Aimee:
             return f"Error: {type(e).__name__}: {e}"
 
 
+class AimeeSession:
+    """A multi-turn conversation on one agent; chat history persists across runs.
+
+    Unlike `Aimee.run()` (stateless), each `run()` here appends to a shared
+    history, so the model sees the whole prior conversation::
+
+        session = agent.session()
+        session.run("hello")
+        session.run("and now...")   # the model remembers the first turn
+
+    A session is bound to one agent (sharing its tools/hooks/config), but an
+    agent can hold many independent sessions at once.
+    """
+
+    def __init__(self, agent: Aimee) -> None:
+        self._agent = agent
+        self._history: list[Message] = []
+
+    @property
+    def history(self) -> list[Message]:
+        """A snapshot of the conversation so far (system message first)."""
+        return list(self._history)
+
+    def run(self, task: str) -> RunReport:
+        """Run one turn of the conversation (sync)."""
+        return self._agent._sync_submit(self.run_async(task))
+
+    async def run_async(self, task: str) -> RunReport:
+        """Run one turn of the conversation (async)."""
+        return await self._agent._run_with_history(task, self._history)
+
+    def clear(self) -> None:
+        """Forget the conversation; a fresh system prompt is built next run."""
+        self._history.clear()
+
+
 def _assistant_message(response: ChatResponse) -> Message:
     """Assistant message in OpenAI wire form (content + raw tool calls)."""
     tool_calls = [
@@ -259,7 +317,7 @@ def _assistant_message(response: ChatResponse) -> Message:
         }
         for tc in response.tool_calls
     ]
-    return Message(role="assistant", content=response.content or None, tool_calls=tool_calls)
+    return Message.assistant(response.content or "", tool_calls)
 
 
 def _assemble_tool_call(index: int, slot: dict[str, str]) -> ToolCall:
