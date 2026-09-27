@@ -44,12 +44,12 @@ from aimee.tools import basic_tools
 config = AimeeConfig(
     roots=[Path.cwd(), Path.home() / ".myapp"],  # workspace roots (first = primary)
     skills_dirs=[Path.home() / ".myapp" / "skills"],
-    model="gpt-4o-mini",                         # default: "default"
+    model="gpt-4o-mini",  # default: "default"
 )
-agent = Aimee(config, tools=basic_tools())       # read, write, edit, bash
+agent = Aimee(config, tools=basic_tools())  # read, write, edit, bash
 # agent = Aimee(config, tools=[read()])          # or just the tools you want
 
-report = agent.run("Summarize AGENTS.md")        # sync (also safe inside a running loop)
+report = agent.run("Summarize AGENTS.md")  # sync (also safe inside a running loop)
 # report = await agent.run_async("...")          # async
 
 print(report.final_text, report.turns, report.tool_calls, report.usage)
@@ -91,8 +91,8 @@ from aimee import Tool
 Tool(
     name="current_time",
     description="Get the current local date and time (ISO format).",
-    parameters={"type": "object", "properties": {}},   # JSON Schema
-    handler=lambda args, ctx: "...",                   # sync or async; returns str
+    parameters={"type": "object", "properties": {}},  # JSON Schema
+    handler=lambda args, ctx: "...",  # sync or async; returns str
 )
 agent.add_tool(tool)
 ```
