@@ -118,8 +118,8 @@ All new (empty repo): tree above. No git repo exists yet — initialize `git ini
 
 ## Steps
 
-- [ ] 1. `git init`, `.gitignore`, `pyproject.toml` (uv, hatchling, `httpx>=0.27`, pytest+ruff dev group), `uv sync`
-- [ ] 2. `types.py` + `config.py`
+- [x] 1. `git init`, `.gitignore`, `pyproject.toml` (uv, hatchling, `httpx>=0.27`, pytest+ruff dev group), `uv sync`
+- [x] 2. `types.py` + `config.py`
 - [ ] 3. `client.py` (OpenAIClient, SSE parsing) + `test_client.py`
 - [ ] 4. `hooks.py` + `prompt.py` + `agent.py` (loop + facade) + `test_agent.py`, `test_prompt.py`, `test_hooks.py`
 - [ ] 5. `skills.py` + `test_skills.py`
