@@ -124,7 +124,7 @@ All new (empty repo): tree above. No git repo exists yet — initialize `git ini
 - [x] 4. `hooks.py` + `prompt.py` + `agent.py` (loop + facade) + `test_agent.py`, `test_prompt.py`, `test_hooks.py`
 - [x] 5. `skills.py` + `test_skills.py`
 - [x] 6. `tools/` (base, fs, bash) + `test_tools.py`
-- [ ] 7. `examples/basic.py` + `examples/custom_tool.py` (+ their `AGENTS.md`/skill fixtures)
+- [x] 7. `examples/basic.py` + `examples/custom_tool.py` (+ their `AGENTS.md`/skill fixtures)
 - [ ] 8. `README.md` (quickstart, config/hook/tool/skill reference, security note on bash)
 - [ ] 9. `uv run ruff check` + `ruff format`, full pytest green
 
