@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -47,10 +48,11 @@ class Console:
         print(f"\n[done] turns={report.turns} tool_calls={report.tool_calls}", file=sys.stderr)
 
 
-def build_agent() -> Aimee:
+def build_agent(model: str | None = None) -> Aimee:
     config = AimeeConfig(
         roots=[HERE, HERE / "secondary"],  # primary + secondary workspace roots
         skills_dirs=[HERE / "skills"],
+        model=model or os.environ.get("AIMEE_MODEL") or "default",
         # agents_md: left as None → nearest AGENTS.md found walking up from roots[0]
     )
     return Aimee(
@@ -81,9 +83,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Aimee drop-in example")
     parser.add_argument("task", nargs="?", default=None, help="Task to run")
     parser.add_argument("--repl", action="store_true", help="Interactive REPL")
+    parser.add_argument(
+        "--model", default=None, help="Model name (default: $AIMEE_MODEL or 'default')"
+    )
     args = parser.parse_args()
 
-    agent = build_agent()
+    agent = build_agent(args.model)
     if args.repl:
         repl(agent)
     else:

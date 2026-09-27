@@ -145,6 +145,8 @@ class OpenAIClient:
                 json=self._body(messages, tools, stream=True),
                 headers=self._auth_headers,
             ) as resp:
+                if resp.status_code >= 400:
+                    await resp.aread()  # streaming body must be read before .text
                 self._raise_for_status(resp)
                 async for line in resp.aiter_lines():
                     delta = parse_sse_line(line)

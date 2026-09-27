@@ -215,6 +215,22 @@ def test_stream_chat_yields_deltas():
     assert deltas[5].usage is not None and deltas[5].usage.total_tokens == 10
 
 
+def test_stream_http_error_raises_with_status():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="internal boom")
+
+    client = make_client(handler)
+
+    async def drain():
+        async for _ in client.stream_chat([Message.user("hi")]):
+            pass
+
+    with pytest.raises(AimeeError) as excinfo:
+        run(drain())
+    assert excinfo.value.status == 500
+    assert "internal boom" in str(excinfo.value)
+
+
 def test_stream_body_includes_stream_options():
     captured = {}
 

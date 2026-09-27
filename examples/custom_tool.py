@@ -12,7 +12,9 @@ Requires OPENAI_API_BASE / OPENAI_API_KEY, like basic.py.
 
 from __future__ import annotations
 
+import argparse
 import datetime
+import os
 import sys
 from pathlib import Path
 
@@ -48,7 +50,16 @@ class SafetyHooks:
 
 
 def main() -> int:
-    config = AimeeConfig(roots=[HERE, HERE / "secondary"], skills_dirs=[HERE / "skills"])
+    parser = argparse.ArgumentParser(description="Aimee custom tool + approval hook example")
+    parser.add_argument(
+        "--model", default=None, help="Model name (default: $AIMEE_MODEL or 'default')"
+    )
+    args = parser.parse_args()
+    config = AimeeConfig(
+        roots=[HERE, HERE / "secondary"],
+        skills_dirs=[HERE / "skills"],
+        model=args.model or os.environ.get("AIMEE_MODEL") or "default",
+    )
     agent = Aimee(
         config,
         tools=[
