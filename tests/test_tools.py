@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import pytest
@@ -36,7 +37,7 @@ def test_read_offset_and_limit(tmp_path):
     assert "     2\tline2" in out
     assert "     3\tline3" in out
     assert "line4" not in out
-    assert "pass offset=4 to continue" in out
+    assert "pass offset=4" in out
 
 
 def test_read_past_end(tmp_path):
@@ -56,6 +57,66 @@ def test_read_directory_lists(tmp_path):
     out = call(read(), {"path": "."}, make_ctx(tmp_path))
     assert "f.txt" in out
     assert "sub/" in out
+
+
+# -- read: resource guards (TODO #4) ------------------------------------------
+
+
+def test_read_fifo_rejected(tmp_path):
+    # A FIFO with no writer blocks open() forever; must be refused up front.
+    os.mkfifo(tmp_path / "pipe")
+    with pytest.raises(ValueError, match="not a regular file"):
+        call(read(), {"path": "pipe"}, make_ctx(tmp_path))
+
+
+def test_read_device_rejected(tmp_path):
+    if not Path("/dev/urandom").exists():
+        pytest.skip("no /dev/urandom on this platform")
+    ctx = make_ctx(tmp_path, allow_path_escape=True)
+    with pytest.raises(ValueError, match="not a regular file"):
+        call(read(), {"path": "/dev/urandom"}, ctx)
+
+
+def _big_file(tmp_path: Path, n: int) -> None:
+    (tmp_path / "big.txt").write_text(
+        "\n".join(f"line{i}" for i in range(1, n + 1)), encoding="utf-8"
+    )
+
+
+def test_read_huge_file_deep_offset(tmp_path):
+    n = 200_000
+    _big_file(tmp_path, n)
+    # A deep offset must reach the last lines without loading the whole file
+    # into memory; a window ending at EOF gets no continuation footer.
+    out = call(read(), {"path": "big.txt", "offset": n - 1, "limit": 2}, make_ctx(tmp_path))
+    assert f"{n - 1}\tline{n - 1}" in out
+    assert f"{n}\tline{n}" in out
+    assert "file continues" not in out
+
+
+def test_read_huge_file_past_end(tmp_path):
+    _big_file(tmp_path, 200_000)
+    out = call(read(), {"path": "big.txt", "offset": 999_999, "limit": 10}, make_ctx(tmp_path))
+    assert "offset 999999 is past end (200000 lines)" in out
+
+
+def test_read_huge_file_bounded_window_footer(tmp_path):
+    _big_file(tmp_path, 200_000)
+    # Window in the middle: scan stops after the window, total is a lower bound.
+    out = call(read(), {"path": "big.txt", "offset": 10, "limit": 5}, make_ctx(tmp_path))
+    assert "line10" in out and "line14" in out
+    assert "line15" not in out
+    assert "the file continues" in out
+    assert "pass offset=15" in out
+
+
+def test_read_oversized_line_rejected(tmp_path, monkeypatch):
+    import aimee.tools.fs as fsmod
+
+    monkeypatch.setattr(fsmod, "_MAX_LINE_BYTES", 100)
+    (tmp_path / "blob.txt").write_text("a" * 200 + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="exceeds"):
+        call(read(), {"path": "blob.txt"}, make_ctx(tmp_path))
 
 
 # -- write --------------------------------------------------------------------

@@ -146,7 +146,7 @@ Built-ins (opt-in): `basic_tools()` → read, write, edit; `basic_tools(["read",
 
 | Tool | Behavior |
 | --- | --- |
-| `read(path, offset?, limit?)` | Numbered lines (paged), or directory listing. |
+| `read(path, offset?, limit?)` | Numbered lines (paged; streams large files, refuses non-regular files), or directory listing. |
 | `write(path, content)` | Create/overwrite; parent dirs created. |
 | `edit(path, old_text, new_text)` | Exact-string replace; `old_text` must match exactly once. |
 | `bash(command, timeout?)` | Shell in the primary root; `[exit N]` + combined output, truncated. |

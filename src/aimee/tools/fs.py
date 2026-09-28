@@ -2,11 +2,60 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from aimee.tools.base import Tool
 
 DEFAULT_READ_LIMIT = 2000
+_READ_CHUNK_SIZE = 1 << 20   # bytes scanned per iteration
+_MAX_LINE_BYTES = 10_000_000  # a line longer than this is treated as binary junk
+
+
+def _read_window(path: Path, offset: int, limit: int) -> tuple[list[str], int, bool]:
+    """Stream a file and return (window, total, complete).
+
+    `window` holds the 1-based lines [offset, offset+limit). Reads in chunks
+    and keeps only that window, so memory is O(window + one line) instead of
+    O(file), and scanning stops as soon as the window is satisfied — at which
+    point `complete` is False and `total` is only a lower bound. Lines are
+    split on \\n with a trailing \\r stripped, so \\r\\n files count like
+    str.splitlines(). A line longer than _MAX_LINE_BYTES raises ValueError
+    rather than growing unbounded.
+    """
+    window: list[str] = []
+    pending = b""  # trailing partial line carried over from the previous chunk
+    total = 0
+    want_lo = offset
+    want_hi = offset + limit
+
+    def keep(line_no: int, raw: bytes) -> None:
+        if want_lo <= line_no < want_hi:
+            window.append(raw.rstrip(b"\r").decode("utf-8", errors="replace"))
+
+    with path.open("rb") as f:
+        while True:
+            chunk = f.read(_READ_CHUNK_SIZE)
+            if not chunk:
+                break
+            parts = (pending + chunk).split(b"\n")
+            pending = parts.pop()
+            for part in parts:
+                total += 1
+                too_long = len(part) > _MAX_LINE_BYTES
+                if too_long or len(pending) > _MAX_LINE_BYTES:
+                    line_no = total if too_long else total + 1
+                    raise ValueError(
+                        f"'{path}': line {line_no} exceeds {_MAX_LINE_BYTES} bytes; "
+                        "refusing to read (file looks binary or pathological)"
+                    )
+                keep(total, part)
+            if total >= want_hi:
+                return window, total, False
+        if pending:  # final line without a trailing newline
+            total += 1
+            keep(total, pending)
+        return window, total, True
 
 
 def read() -> Tool:
@@ -17,19 +66,27 @@ def read() -> Tool:
         if path.is_dir():
             entries = sorted(e.name + ("/" if e.is_dir() else "") for e in path.iterdir())
             return "\n".join(entries) if entries else "[empty directory]"
+        # Devices (/dev/urandom), FIFOs, and sockets block or grow without
+        # bound — only plain files are readable, no matter how deep the offset.
+        if not path.is_file():
+            raise ValueError(
+                f"'{path}' is not a regular file; read supports only plain files "
+                "and directories (refusing devices, FIFOs, and sockets)"
+            )
         offset = max(int(args.get("offset", 1)), 1)
         limit = max(int(args.get("limit", DEFAULT_READ_LIMIT)), 1)
-        text = path.read_text(encoding="utf-8", errors="replace")
-        lines = text.splitlines()
-        total = len(lines)
-        chunk = lines[offset - 1 : offset - 1 + limit]
+        chunk, total, complete = _read_window(path, offset, limit)
         out = "\n".join(f"{i:>6}\t{line}" for i, line in enumerate(chunk, start=offset))
         if not chunk:
             out += f"\n[empty file, or offset {offset} is past end ({total} lines)]"
-        elif offset - 1 + limit < total:
-            shown_to = offset - 1 + len(chunk)
-            out += f"\n[showing lines {offset}-{shown_to} of {total}; "
-            out += f"pass offset={shown_to + 1} to continue]"
+        else:
+            # An exact total only exists after scanning to EOF — which means the
+            # window already reaches the end — so a continuation footer is only
+            # ever paired with a "file continues" (lower-bound) note.
+            if not complete:
+                shown_to = offset - 1 + len(chunk)
+                out += f"\n[showing lines {offset}-{shown_to}; the file continues; "
+                out += f"pass offset={shown_to + 1} to read more]"
         return out
 
     return Tool(
