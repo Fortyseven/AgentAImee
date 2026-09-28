@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import warnings
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,7 @@ from aimee import (
     ToolCallDelta,
     ToolDecision,
 )
-from aimee.tools import read
+from aimee.tools import bash, read
 
 USAGE_1 = TokenUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 USAGE_2 = TokenUsage(prompt_tokens=3, completion_tokens=2, total_tokens=5)
@@ -408,3 +409,38 @@ def test_close_and_rerun(tmp_path, monkeypatch):
     # After close, the background loop restarts and the client is recreated.
     assert agent.run("x").final_text == "two"  # fresh client, fresh loop
     agent.close()
+
+
+# -- bash approval warning ----------------------------------------------------
+
+
+class DenyAllHooks:
+    def on_tool_call(self, name, args):
+        return ToolDecision.deny("no")
+
+
+def test_bash_without_approval_hook_warns(tmp_path):
+    config = AimeeConfig(roots=[tmp_path], api_key="sk-test")
+    with pytest.warns(UserWarning, match="on_tool_call"):
+        Aimee(config, tools=[bash()])
+
+
+def test_bash_with_approval_hook_does_not_warn(tmp_path):
+    config = AimeeConfig(roots=[tmp_path], api_key="sk-test")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        Aimee(config, tools=[bash()], hooks=[DenyAllHooks()])
+
+
+def test_default_tools_do_not_warn(tmp_path):
+    config = AimeeConfig(roots=[tmp_path], api_key="sk-test")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        Aimee(config, tools=[read()])
+
+
+def test_add_bash_without_hook_warns(tmp_path):
+    config = AimeeConfig(roots=[tmp_path], api_key="sk-test")
+    agent = Aimee(config, tools=[read()])
+    with pytest.warns(UserWarning, match="on_tool_call"):
+        agent.add_tool(bash())

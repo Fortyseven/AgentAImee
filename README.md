@@ -56,7 +56,7 @@ config = AimeeConfig(
     skills_dirs=[Path.home() / ".myapp" / "skills"],
     model="gpt-4o-mini",  # default: "default"
 )
-agent = Aimee(config, tools=basic_tools())  # read, write, edit, bash
+agent = Aimee(config, tools=basic_tools())  # read, write, edit (bash is opt-in)
 # agent = Aimee(config, tools=[read()])          # or just the tools you want
 
 report = agent.run("Summarize AGENTS.md")  # sync (also safe inside a running loop)
@@ -111,6 +111,7 @@ session.clear()  # start over (a fresh system prompt is built on the next run)
 | `temperature` / `max_tokens` | `None` | Passed through when set. |
 | `bash_timeout` | `120` | Default shell timeout (seconds). |
 | `output_limit` | `100_000` | Tool output truncation (chars). |
+| `allow_path_escape` | `False` | `read`/`write`/`edit` reject paths resolving outside the workspace roots (`..`, symlinks, absolute) with `PathEscapeError`. `True` restores unrestricted path access. |
 
 **Multi-root rules.** `roots[0]` is the primary root. `read`/`edit` resolve
 relative paths against roots in order (first existing file wins); `write`
@@ -138,8 +139,10 @@ agent.add_tool(tool)
 built-ins: `ctx.roots`, `ctx.resolve(path, must_exist=...)`,
 `ctx.config.bash_timeout`, `ctx.config.output_limit`.
 
-Built-ins (opt-in): `basic_tools()` → all four, `basic_tools(["read", "edit"])`
-→ a subset, or import individually: `from aimee.tools import read, write, edit, bash`.
+Built-ins (opt-in): `basic_tools()` → read, write, edit; `basic_tools(["read", "bash"])`
+→ a named subset, or import individually: `from aimee.tools import read, write, edit, bash`.
+`bash` is **not** in the default set — add it explicitly and gate it with an
+`on_tool_call` approval hook.
 
 | Tool | Behavior |
 | --- | --- |
@@ -148,9 +151,17 @@ Built-ins (opt-in): `basic_tools()` → all four, `basic_tools(["read", "edit"])
 | `edit(path, old_text, new_text)` | Exact-string replace; `old_text` must match exactly once. |
 | `bash(command, timeout?)` | Shell in the primary root; `[exit N]` + combined output, truncated. |
 
-> **Security note.** `bash` has no built-in approval. The `on_tool_call` hook
-> is the safety mechanism — see `examples/custom_tool.py` for a hook that
-> denies commands containing `rm `. Don't enable `bash` without one.
+> **Security note.**
+>
+> - `bash` has no built-in approval and is **not** in `basic_tools()`' default
+>   set. The `on_tool_call` hook is the safety mechanism — see
+>   `examples/custom_tool.py` for a hook that denies commands containing `rm `.
+>   If you register `bash` without any `on_tool_call` hook, `Aimee` warns at
+>   construction. Don't enable `bash` without one.
+> - `read`/`write`/`edit` are confined to the workspace `roots` by default: any
+>   path resolving outside them (`..` traversal, symlinks, absolute paths) is
+>   rejected with `PathEscapeError`. Set `AimeeConfig(allow_path_escape=True)`
+>   to restore unrestricted access.
 
 ## Hooks
 

@@ -39,6 +39,10 @@ class AimeeConfig:
     max_tokens: int | None = None
     bash_timeout: int = 120
     output_limit: int = 100_000
+    # fs tools (read/write/edit) resolve paths against `roots` and reject
+    # anything that lands outside them (`..` traversal, symlinks, absolute
+    # paths) with PathEscapeError. True restores the old unrestricted behavior.
+    allow_path_escape: bool = False
 
     def resolved_api_base(self) -> str:
         """API base URL: explicit config, else $OPENAI_API_BASE, else OpenAI."""

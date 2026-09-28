@@ -2,20 +2,30 @@
 
 Usage:
     from aimee.tools import basic_tools, read
-    agent = Aimee(config, tools=basic_tools())             # read, write, edit, bash
+    agent = Aimee(config, tools=basic_tools())             # read, write, edit
     agent = Aimee(config, tools=[read()])                  # just read
-    agent = Aimee(config, tools=basic_tools(["read", "edit"]))
+    agent = Aimee(config, tools=basic_tools(["read", "bash"]))  # bash is opt-in
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
-from aimee.tools.base import Tool, ToolContext, validate_tools
+from aimee.tools.base import PathEscapeError, Tool, ToolContext, validate_tools
 from aimee.tools.bash import bash
 from aimee.tools.fs import edit, read, write
 
-__all__ = ["Tool", "ToolContext", "bash", "basic_tools", "edit", "read", "validate_tools", "write"]
+__all__ = [
+    "PathEscapeError",
+    "Tool",
+    "ToolContext",
+    "bash",
+    "basic_tools",
+    "edit",
+    "read",
+    "validate_tools",
+    "write",
+]
 
 _FACTORIES: dict[str, type] = {"read": read, "write": write, "edit": edit, "bash": bash}
 
@@ -23,11 +33,14 @@ _FACTORIES: dict[str, type] = {"read": read, "write": write, "edit": edit, "bash
 def basic_tools(names: Iterable[str] | None = None) -> list[Tool]:
     """Fresh instances of the built-in tools.
 
-    `names=None` returns all four (read, write, edit, bash); a name sequence
-    returns just the selected subset in the given order.
+    `names=None` returns read, write, and edit. `bash` is deliberately NOT in
+    the default: it runs arbitrary shell commands and must be added explicitly
+    (e.g. `basic_tools(["read", "bash"])` or `bash()`), gated by an
+    `on_tool_call` approval hook. A name sequence returns just the selected
+    subset in the given order.
     """
     if names is None:
-        names = ["read", "write", "edit", "bash"]
+        names = ["read", "write", "edit"]
     tools: list[Tool] = []
     for name in names:
         factory = _FACTORIES.get(name)

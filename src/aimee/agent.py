@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import json
 import threading
+import warnings
 from collections.abc import Iterable
 from typing import Any
 
@@ -64,13 +65,32 @@ class Aimee:
         self.tools: list[Tool] = list(tools)
         self.hooks: list[Any] = list(hooks)
         self.stream = stream
+        self._warn_if_bash_unapproved()
 
     # -- registration ------------------------------------------------------
 
     def add_tool(self, tool: Tool) -> Aimee:
         """Register one tool; returns self for chaining."""
         self.tools.append(tool)
+        self._warn_if_bash_unapproved()
         return self
+
+    def _warn_if_bash_unapproved(self) -> None:
+        """Warn if bash is registered but no hook defines on_tool_call approval.
+
+        bash has no built-in approval; without an on_tool_call hook the model's
+        shell commands run unvetted (see the README security note).
+        """
+        if not any(t.name == "bash" for t in self.tools):
+            return
+        if any(hasattr(hook, "on_tool_call") for hook in self.hooks):
+            return
+        warnings.warn(
+            "bash tool is registered but no hook defines on_tool_call: shell "
+            "commands requested by the model will run unapproved. Add an "
+            "approval hook (see README security note) or drop bash from tools.",
+            stacklevel=2,
+        )
 
     def add_hook(self, hook: Any) -> Aimee:
         """Register a hook object (any subset of the on_* methods); chainable."""

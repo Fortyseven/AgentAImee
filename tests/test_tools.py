@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from aimee import AimeeConfig
-from aimee.tools import Tool, bash, basic_tools, edit, read, write
+from aimee.tools import PathEscapeError, Tool, bash, basic_tools, edit, read, write
 from aimee.tools.base import ToolContext
 
 
@@ -187,10 +187,79 @@ def test_multi_root_edit_across_roots(tmp_path):
     assert (other / "doc.md").read_text(encoding="utf-8") == "goodbye"
 
 
-def test_absolute_path_passes_through(tmp_path):
+def test_absolute_path_outside_rejected_by_default(tmp_path):
+    target = Path("/tmp/aimee-absolute-test.txt")
+    with pytest.raises(PathEscapeError, match="escapes workspace"):
+        call(write(), {"path": str(target), "content": "abs"}, make_ctx(tmp_path))
+    assert not target.exists()
+
+
+# -- workspace containment ----------------------------------------------------
+
+
+def make_nested_ctx(tmp_path: Path, **cfg) -> tuple[ToolContext, Path]:
+    """ctx rooted at tmp_path/repo, with a secret file as its sibling."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("top secret", encoding="utf-8")
+    config = AimeeConfig(roots=[repo], **cfg)
+    return ToolContext(config=config, roots=config.resolved_roots()), secret
+
+
+def test_read_dotdot_traversal_rejected(tmp_path):
+    ctx, _ = make_nested_ctx(tmp_path)
+    with pytest.raises(PathEscapeError, match="escapes workspace"):
+        call(read(), {"path": "../secret.txt"}, ctx)
+
+
+def test_write_dotdot_traversal_rejected(tmp_path):
+    ctx, secret = make_nested_ctx(tmp_path)
+    with pytest.raises(PathEscapeError):
+        call(write(), {"path": "../secret.txt", "content": "pwned"}, ctx)
+    assert secret.read_text(encoding="utf-8") == "top secret"
+
+
+def test_write_absolute_outside_rejected(tmp_path):
+    ctx, secret = make_nested_ctx(tmp_path)
+    with pytest.raises(PathEscapeError):
+        call(write(), {"path": str(secret), "content": "pwned"}, ctx)
+    assert secret.read_text(encoding="utf-8") == "top secret"
+
+
+def test_edit_outside_rejected(tmp_path):
+    ctx, secret = make_nested_ctx(tmp_path)
+    with pytest.raises(PathEscapeError):
+        call(edit(), {"path": str(secret), "old_text": "top", "new_text": "nope"}, ctx)
+
+
+def test_read_symlink_escape_rejected(tmp_path):
+    ctx, secret = make_nested_ctx(tmp_path)
+    (ctx.primary_root / "sneaky").symlink_to(secret)
+    with pytest.raises(PathEscapeError):
+        call(read(), {"path": "sneaky"}, ctx)
+
+
+def test_read_absolute_inside_workspace_allowed(tmp_path):
+    ctx, _ = make_nested_ctx(tmp_path)
+    (ctx.primary_root / "a.txt").write_text("inside", encoding="utf-8")
+    out = call(read(), {"path": str(ctx.primary_root / "a.txt")}, ctx)
+    assert "inside" in out
+
+
+def test_allow_path_escape_permits_traversal(tmp_path):
+    ctx, secret = make_nested_ctx(tmp_path, allow_path_escape=True)
+    out = call(read(), {"path": "../secret.txt"}, ctx)
+    assert "top secret" in out
+    call(write(), {"path": "../secret.txt", "content": "pwned"}, ctx)
+    assert secret.read_text(encoding="utf-8") == "pwned"
+
+
+def test_allow_path_escape_permits_absolute(tmp_path):
+    ctx = make_ctx(tmp_path, allow_path_escape=True)
     target = Path("/tmp/aimee-absolute-test.txt")
     try:
-        call(write(), {"path": str(target), "content": "abs"}, make_ctx(tmp_path))
+        call(write(), {"path": str(target), "content": "abs"}, ctx)
         assert target.read_text(encoding="utf-8") == "abs"
     finally:
         target.unlink(missing_ok=True)
@@ -201,8 +270,13 @@ def test_absolute_path_passes_through(tmp_path):
 
 def test_basic_tools_all():
     tools = basic_tools()
-    assert [t.name for t in tools] == ["read", "write", "edit", "bash"]
+    assert [t.name for t in tools] == ["read", "write", "edit"]
     assert all(isinstance(t, Tool) for t in tools)
+
+
+def test_basic_tools_default_excludes_bash():
+    # bash runs arbitrary shell commands; it must be an explicit opt-in.
+    assert "bash" not in [t.name for t in basic_tools()]
 
 
 def test_basic_tools_subset_in_order():

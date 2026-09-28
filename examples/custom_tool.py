@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 from aimee import Aimee, AimeeConfig, AimeeError, RunReport, Tool, ToolDecision
-from aimee.tools import basic_tools
+from aimee.tools import bash, basic_tools
 
 HERE = Path(__file__).resolve().parent
 
@@ -67,7 +67,8 @@ def main() -> int:
     agent = Aimee(
         config,
         tools=[
-            *basic_tools(),  # all four built-ins, including bash (gated by the hook)
+            *basic_tools(),  # read, write, edit
+            bash(),  # explicitly opted in (gated by the hook below)
             Tool(
                 name="current_time",
                 description="Get the current local date and time (ISO format).",
