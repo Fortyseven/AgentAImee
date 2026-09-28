@@ -41,7 +41,7 @@ class OpenAIClient:
             client = httpx.AsyncClient(
                 base_url=config.resolved_api_base().rstrip("/"),
                 timeout=timeout,
-                verify=False if os.environ.get("INSECURE_SSL") == "1" else True
+                verify=os.environ.get("INSECURE_SSL") != "1",
             )
         self._client = client
         # Sent per-request so injected clients (tests, proxies) also authenticate.

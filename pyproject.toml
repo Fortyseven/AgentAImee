@@ -15,9 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = [
-    "httpx>=0.27",
-]
+dependencies = ["httpx>=0.27"]
 
 [project.urls]
 Homepage = "https://github.com/Fortyseven/AgentAImee"
@@ -25,10 +23,7 @@ Homepage = "https://github.com/Fortyseven/AgentAImee"
 Issues = "https://github.com/Fortyseven/AgentAImee/issues"
 
 [dependency-groups]
-dev = [
-    "pytest>=8",
-    "ruff>=0.5",
-]
+dev = ["pytest>=8", "ruff>=0.5"]
 
 [build-system]
 requires = ["hatchling"]
