@@ -1,0 +1,50 @@
+# Publish agent-aimee to PyPI via trusted publishing (no stored tokens).
+#
+# Triggered by pushing a version tag:
+#   1. bump `version` in pyproject.toml, commit to main
+#   2. git tag v<version> && git push --tags
+#
+# Requires a trusted publisher registered on PyPI (project -> Settings ->
+# Publishing -> "Add a new trusted publisher"): GitHub Actions,
+# owner Fortyseven, repo AgentAImee, workflow publish.yml.
+
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # needed for PyPI trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Lint and test
+        run: |
+          uv sync --frozen
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pytest -q
+
+      - name: Check tag matches pyproject version
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          if [ "v${v}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match pyproject version ${v}"
+            exit 1
+          fi
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypi/pypi-publish@v1.9.0
+        with:
+          packages-dir: dist
