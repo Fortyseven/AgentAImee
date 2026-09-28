@@ -16,7 +16,17 @@ client, skill discovery, AGENTS.md support, and callback hooks.
 - **Sync or async**: `agent.run(task)` works in any script; `await
   agent.run_async(task)` for async code.
 
-## Setup
+## Install
+
+```bash
+uv add agent-aimee        # or: pip install agent-aimee
+```
+
+```python
+from aimee import Aimee, AimeeConfig  # module name is `aimee`
+```
+
+## Development
 
 ```bash
 uv sync
