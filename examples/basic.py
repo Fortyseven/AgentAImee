@@ -15,7 +15,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -51,11 +50,10 @@ class Console:
 def build_agent(model: str | None = None) -> Aimee:
     # Precedence: --model flag → $AIMEE_MODEL → AimeeConfig default. When neither
     # override is set we omit the kwarg so the library default is used untouched.
-    chosen = model or os.environ.get("AIMEE_MODEL")
     config = AimeeConfig(
         roots=[HERE, HERE / "secondary"],  # primary + secondary workspace roots
         skills_dirs=[HERE / "skills"],
-        **({"model": chosen} if chosen else {}),
+        **({"model": model} if model else {}),
         # agents_md: left as None → nearest AGENTS.md found walking up from roots[0]
     )
     return Aimee(
@@ -98,14 +96,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Aimee drop-in example")
     parser.add_argument("task", nargs="?", default=None, help="Task to run")
     parser.add_argument("--repl", action="store_true", help="Interactive REPL")
-    parser.add_argument(
-        "--model",
-        default=None,
-        help="Model name (default: $AIMEE_MODEL or the AimeeConfig default)",
-    )
     args = parser.parse_args()
 
-    agent = build_agent(args.model)
+    agent = build_agent()
     try:
         if args.repl:
             repl(agent)
