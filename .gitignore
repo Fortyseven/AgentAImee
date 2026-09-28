@@ -6,3 +6,6 @@ build/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+
+# personal notes, not for the repo
+PUBLISH.md
