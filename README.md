@@ -1,4 +1,4 @@
-# Aimee
+# AgentAImee
 
 A very minimal LLM agent loop for Python, with tools and skills. One runtime
 dependency (`httpx`). Drop it into an existing project; you own the config,
