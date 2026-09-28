@@ -7,7 +7,6 @@ and SSE streaming. No `openai` package involved.
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import AsyncIterator, Iterable, Sequence
 from typing import Any
 
@@ -41,7 +40,7 @@ class OpenAIClient:
             client = httpx.AsyncClient(
                 base_url=config.resolved_api_base().rstrip("/"),
                 timeout=timeout,
-                verify=os.environ.get("INSECURE_SSL") != "1",
+                verify=config.verify_tls,
             )
         self._client = client
         # Sent per-request so injected clients (tests, proxies) also authenticate.

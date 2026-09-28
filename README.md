@@ -103,6 +103,7 @@ session.clear()  # start over (a fresh system prompt is built on the next run)
 | `model` | `"default"` | Model name passed to the endpoint. |
 | `api_base` | `$OPENAI_API_BASE` → `https://api.openai.com/v1` | Endpoint base URL. |
 | `api_key` | `$OPENAI_API_KEY` | Bearer token. |
+| `verify_tls` | `True` | Verify TLS certificates. `False` disables verification — self-signed local endpoints only. |
 | `system_prompt` | built-in minimal prompt | Replaces the base prompt. |
 | `agents_md` | nearest `AGENTS.md` walking up from `roots` | Explicit AGENTS.md path. |
 | `skills_dirs` | `[]` | Directories containing `SKILL.md` skill folders. |

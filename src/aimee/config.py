@@ -30,6 +30,7 @@ class AimeeConfig:
     model: str = "qwen38/27b-default"
     api_base: str | None = None
     api_key: str | None = None
+    verify_tls: bool = True
     system_prompt: str | None = None
     agents_md: Path | None = None
     skills_dirs: list[Path] = field(default_factory=list)

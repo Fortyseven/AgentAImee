@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ssl
 
 import httpx
 import pytest
@@ -249,6 +250,37 @@ def test_stream_body_includes_stream_options():
     run(drain())
     assert captured["body"]["stream"] is True
     assert captured["body"]["stream_options"] == {"include_usage": True}
+
+
+def real_client(**cfg) -> OpenAIClient:
+    """Client that builds its own httpx transport (so verify= is exercised)."""
+    config = AimeeConfig(api_base="http://testserver", api_key="sk-test", **cfg)
+    return OpenAIClient(config)
+
+
+def ssl_verify_mode(client: OpenAIClient) -> int:
+    """httpx 0.28 exposes no public `verify`; inspect the transport's SSL context."""
+    return client._client._transport._pool._ssl_context.verify_mode
+
+
+def test_default_client_verifies_tls():
+    client = real_client()
+    assert ssl_verify_mode(client) == ssl.CERT_REQUIRED
+    run(client.aclose())
+
+
+def test_verify_tls_false_disables_verification():
+    client = real_client(verify_tls=False)
+    assert ssl_verify_mode(client) == ssl.CERT_NONE
+    run(client.aclose())
+
+
+def test_insecure_ssl_env_has_no_effect(monkeypatch):
+    """Regression guard: the old INSECURE_SSL=1 backdoor must stay dead."""
+    monkeypatch.setenv("INSECURE_SSL", "1")
+    client = real_client()
+    assert ssl_verify_mode(client) == ssl.CERT_REQUIRED
+    run(client.aclose())
 
 
 def test_parse_sse_line_ignores_noise():
