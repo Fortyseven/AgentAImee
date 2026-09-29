@@ -62,7 +62,7 @@ class OpenAIClient:
     ) -> dict[str, Any]:
         """Build the chat completions request body."""
         body: dict[str, Any] = {
-            "model": self.config.model,
+            "model": self.config.resolved_model(),
             "messages": [m.to_openai() for m in messages],
         }
         tool_list = list(tools) if tools else []

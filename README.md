@@ -54,7 +54,7 @@ from aimee.tools import basic_tools
 config = AimeeConfig(
     roots=[Path.cwd(), Path.home() / ".myapp"],  # workspace roots (first = primary)
     skills_dirs=[Path.home() / ".myapp" / "skills"],
-    model="gpt-4o-mini",  # default: "default"
+    model="gpt-4o-mini",  # required (will try to pull from $OPENAI_MODEL if not set)
 )
 agent = Aimee(config, tools=basic_tools())  # read, write, edit (bash is opt-in)
 # agent = Aimee(config, tools=[read()])          # or just the tools you want
@@ -100,7 +100,7 @@ session.clear()  # start over (a fresh system prompt is built on the next run)
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `roots` | `[Path.cwd()]` | Workspace roots, in priority order (see below). All paths are configurable here. |
-| `model` | `"default"` | Model name passed to the endpoint. |
+| `model` | -- | Model name passed to the endpoint. Required, but if missing, will try to pull from `$OPENAI_MODEL`. |
 | `api_base` | `$OPENAI_API_BASE` → `https://api.openai.com/v1` | Endpoint base URL. |
 | `api_key` | `$OPENAI_API_KEY` | Bearer token. |
 | `verify_tls` | `True` | Verify TLS certificates. `False` disables verification — self-signed local endpoints only. |

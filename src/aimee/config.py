@@ -8,6 +8,7 @@ from pathlib import Path
 
 ENV_API_BASE = "OPENAI_API_BASE"
 ENV_API_KEY = "OPENAI_API_KEY"
+ENV_MODEL = "OPENAI_MODEL"
 DEFAULT_API_BASE = "https://api.openai.com/v1"
 
 
@@ -27,7 +28,7 @@ class AimeeConfig:
     """
 
     roots: list[Path] = field(default_factory=_default_roots)
-    model: str = "qwen38/27b-default"
+    model: str | None = None
     api_base: str | None = None
     api_key: str | None = None
     verify_tls: bool = True
@@ -54,6 +55,14 @@ class AimeeConfig:
         if not key:
             raise ValueError(f"No API key: set {ENV_API_KEY} or pass AimeeConfig(api_key=...)")
         return key
+
+    def resolved_model(self) -> str:
+        """
+        Model: explicit config, else $OPENAI_MODEL, else empty string. While an empty
+        string may result in an error, some endpoints may have just a default model. Some
+        servers may ignore the model name entirely and just infer against whatever is loaded.
+        """
+        return self.model or os.environ.get(ENV_MODEL) or ""
 
     def resolved_roots(self) -> list[Path]:
         """Expanded, absolute workspace roots (first entry is the primary root)."""
